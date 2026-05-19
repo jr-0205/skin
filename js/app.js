@@ -1,0 +1,943 @@
+const VZGE_BASE = 'https://vzge.me/';
+const FALLBACK_BASE = 'fallback.php?url=';
+const DEFAULT_CARRIER_SKIN = 'assets/default-skin.png';
+const generatorMode = document.body.dataset.generator || 'carrier';
+const isPeluchesMode = generatorMode === 'peluches';
+let useFallback = false;
+let vzgeChecked = false;
+
+function getElement(id) {
+	return document.getElementById(id);
+}
+
+function isChecked(id) {
+	const element = getElement(id);
+	return element ? element.checked : false;
+}
+
+function showImageCard(imageElement) {
+	if (!imageElement) return;
+	const card = imageElement.closest('.image-card');
+	if (!card || card.dataset.hiddenPreview === 'true') return;
+	card.classList.remove('is-hidden');
+}
+
+function getApiUrl(path) {
+	return useFallback ? FALLBACK_BASE + encodeURIComponent(path) : VZGE_BASE + path;
+}
+
+function checkVzgeAvailability() {
+	return new Promise(function(resolve) {
+		if (vzgeChecked) { resolve(); return; }
+		var img = new Image();
+		img.crossOrigin = 'Anonymous';
+		var timer = setTimeout(function() {
+			useFallback = true;
+			vzgeChecked = true;
+			console.log('vzge.me timed out — using fallback');
+			resolve();
+		}, 4000);
+		img.onload = function() {
+			clearTimeout(timer);
+			try {
+				var c = document.createElement('canvas');
+				c.width = img.width; c.height = img.height;
+				var cx = c.getContext('2d');
+				cx.drawImage(img, 0, 0);
+				cx.getImageData(0, 0, 1, 1);
+				useFallback = false;
+			} catch(e) {
+				useFallback = true;
+				console.log('vzge.me CORS blocked — using fallback');
+			}
+			vzgeChecked = true;
+			resolve();
+		};
+		img.onerror = function() {
+			clearTimeout(timer);
+			useFallback = true;
+			vzgeChecked = true;
+			console.log('vzge.me unreachable — using fallback');
+			resolve();
+		};
+		img.src = VZGE_BASE + 'processedskin/v3v?' + Date.now();
+	});
+}
+
+function getUsersFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const headskin = params.get('head') || '';
+            const carrierskin = isPeluchesMode ? '' : (params.get('carrier') || '');
+            const skin1_64x32 = params.get('s1x32') == 'true';
+            const skin1_jacket = params.get('jacket') == 'true';
+            const skin2_64x32 = params.get('s2x32') == 'true';
+            const skin2_slim = params.get('slim') == 'true';
+            const fix_eyes = params.get('eyes') == 'true';
+            const side_arms = params.get('arms') == 'true';
+        
+            let img1Loaded = false;
+            let img2Loaded = false;
+        
+            // Set tickbox states based on URL parameters
+            if (getElement('skin1_64x32')) getElement('skin1_64x32').checked = skin1_64x32;
+            if (getElement('skin1_jacket')) getElement('skin1_jacket').checked = skin1_jacket;
+            if (getElement('skin2_64x32')) getElement('skin2_64x32').checked = skin2_64x32;
+            if (getElement('skin2_slim')) getElement('skin2_slim').checked = skin2_slim;
+            if (getElement('fix_eyes')) getElement('fix_eyes').checked = fix_eyes;
+            if (getElement('side_arms')) getElement('side_arms').checked = side_arms;
+        
+            if (headskin) {
+                username1.value = headskin;
+                handleInput(username1, function(img) {
+                    img1Element.src = img.src;
+                    showImageCard(img1Element);
+                    img1Data = getImageData(img);
+                    img1Loaded = true;
+                    if (img1Loaded && img2Loaded) combineSkins();
+                });
+            }
+        
+            if (carrierskin && username2) {
+                username2.value = carrierskin;
+                handleInput(username2, function(img) {
+                    img2Element.src = img.src;
+                    showImageCard(img2Element);
+                    img2Data = getImageData(img);
+                    img2Loaded = true;
+                    if (img1Loaded && img2Loaded) combineSkins();
+                });
+            }
+        
+            return {
+                headskin,
+                carrierskin,
+                skin1_64x32,
+                skin1_jacket,
+                skin2_64x32,
+                skin2_slim,
+                fix_eyes,
+                side_arms
+            };
+        }
+
+function setNamesInUrl(headskin, carrierskin) {
+            const params = new URLSearchParams();
+            const skin1_64x32 = isChecked('skin1_64x32');
+            const skin1_jacket = isChecked('skin1_jacket');
+            const skin2_64x32 = isChecked('skin2_64x32');
+            const skin2_slim = isChecked('skin2_slim');
+            const fix_eyes = isChecked('fix_eyes');
+            const side_arms = isChecked('side_arms');
+        
+            params.set('head', headskin);
+            if (!isPeluchesMode) params.set('carrier', carrierskin);
+            (skin1_64x32) ? params.set('s1x32', skin1_64x32) : params.delete('s1x32');
+            (skin1_jacket) ? params.set('jacket', skin1_jacket) : params.delete('jacket');
+            (skin2_64x32) ? params.set('s2x32', skin2_64x32) : params.delete('s2x32');
+            (skin2_slim) ? params.set('slim', skin2_slim) : params.delete('slim');
+            (fix_eyes) ? params.set('eyes', fix_eyes) : params.delete('eyes');
+            (side_arms) ? params.set('arms', side_arms) : params.delete('arms');
+        
+            window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
+        }
+	    
+const upload1 = getElement('upload1');
+const upload2 = getElement('upload2');
+const username1 = getElement('username1');
+const username2 = getElement('username2');
+const canvas = getElement('canvas');
+const ctx = canvas.getContext('2d');
+const img1Element = getElement('img1');
+const img2Element = getElement('img2');
+const combinedImgElement = getElement('combinedImg');
+const downloadBtn = getElement('downloadBtn');
+
+let img1Data = null;
+let img2Data = null;
+
+function loadImage(fileOrUrl, callback) {
+	const img = new Image();
+	if (fileOrUrl instanceof File || !String(fileOrUrl).startsWith('assets/')) {
+		img.crossOrigin = "Anonymous";
+	}
+	img.onload = function() {
+		callback(img);
+	}
+	if (fileOrUrl instanceof File) {
+		const reader = new FileReader();
+		reader.onload = function(event) {
+			img.src = event.target.result;
+		}
+		reader.readAsDataURL(fileOrUrl);
+	} else {
+		img.onerror = function() {
+			if (!useFallback) {
+				useFallback = true;
+				vzgeChecked = true;
+				console.log('Direct load failed, retrying via fallback');
+				var retryImg = new Image();
+				retryImg.crossOrigin = "Anonymous";
+				retryImg.onload = function() { callback(retryImg); };
+				retryImg.onerror = function() {
+					console.error('Fallback load also failed');
+				};
+				var path = fileOrUrl.replace(VZGE_BASE, '');
+				retryImg.src = FALLBACK_BASE + encodeURIComponent(path);
+			} else {
+				console.error('Failed to load image: ' + fileOrUrl);
+			}
+		};
+		img.src = fileOrUrl;
+	}
+}
+
+function getImageData(img) {
+	const tempCanvas = document.createElement('canvas');
+	const tempCtx = tempCanvas.getContext('2d');
+	tempCanvas.width = 64;
+	tempCanvas.height = 64;
+
+	tempCtx.clearRect(0, 0, 64, 64);
+	tempCtx.drawImage(img, 0, 0, img.width, img.height);
+
+	return tempCtx.getImageData(0, 0, 64, 64);
+}
+
+function copyArea(srcData, srcX, srcY, width, height, destX, destY, destData, rotate = false) {
+	for (let y = 0; y < height; y++) {
+		for (let x = 0; x < width; x++) {
+			const srcIndex = ((srcY + y) * 64 + (srcX + x)) * 4;
+			let destIndex;
+
+			if (rotate) {
+				const rotatedX = width - 1 - x;
+				const rotatedY = height - 1 - y;
+				destIndex = ((destY + rotatedY) * 64 + (destX + rotatedX)) * 4;
+			} else {
+				destIndex = ((destY + y) * 64 + (destX + x)) * 4;
+			}
+
+			for (let i = 0; i < 4; i++) {
+				destData[destIndex + i] = srcData[srcIndex + i];
+			}
+		}
+	}
+}
+
+        function setPixel(destData, x, y, color) {
+            if (x < 0 || x >= 64 || y < 0 || y >= 64) return;
+            const index = ((y * 64) + x) * 4;
+            destData[index + 0] = color[0]; // Red
+            destData[index + 1] = color[1]; // Green
+            destData[index + 2] = color[2]; // Blue
+            destData[index + 3] = color[3]; // Alpha
+        }
+
+function clearArea(destData, x, y, width, height) {
+	for (let yy = y; yy < y + height; yy++) {
+		for (let xx = x; xx < x + width; xx++) {
+			setPixel(destData, xx, yy, [0, 0, 0, 0]);
+		}
+	}
+}
+
+function drawPixelTextVertical(text, destData, x, y, color) {
+	const font = {
+		J: ['111', '001', '001', '101', '111'],
+		U: ['101', '101', '101', '101', '111'],
+		N: ['101', '111', '111', '111', '101'],
+		I: ['111', '010', '010', '010', '111'],
+		O: ['111', '101', '101', '101', '111'],
+		R: ['110', '101', '110', '101', '101'],
+		C: ['111', '100', '100', '100', '111'],
+		T: ['111', '010', '010', '010', '010'],
+		_: ['000', '000', '000', '000', '111']
+	};
+
+	for (const char of text.toUpperCase()) {
+		const glyph = font[char];
+		if (!glyph) {
+			y += 5;
+			continue;
+		}
+
+		for (let row = 0; row < glyph.length; row++) {
+			for (let col = 0; col < glyph[row].length; col++) {
+				if (glyph[row][col] === '1') {
+					setPixel(destData, x + col, y + row, color);
+				}
+			}
+		}
+		y += 5;
+	}
+}
+
+function sanitizeFilename(name) {
+	return name
+		.replace(/[\\\/:*?"<>|]+/g, '')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+function getDownloadFilename() {
+	const head = (username1.value || '').trim();
+	const carrier = username2 ? (username2.value || '').trim() : '';
+	const baseName = isPeluchesMode ? `Peluche ${head}` : `Mini${head} cargado por ${carrier}`;
+	const safe = sanitizeFilename(baseName);
+	return (safe.length ? safe : (isPeluchesMode ? "Peluche" : "Mini cargado por")) + ".png";
+}
+
+function updateDownloadState() {
+	const hasResult = !!combinedImgElement.src && combinedImgElement.src.startsWith('data:image/');
+	downloadBtn.disabled = !hasResult;
+}
+
+function triggerDownload() {
+	if (!combinedImgElement.src) return;
+
+	const a = document.createElement('a');
+	a.href = combinedImgElement.src;
+	a.download = getDownloadFilename();
+	document.body.appendChild(a);
+	a.click();
+	a.remove();
+}
+
+downloadBtn.addEventListener('click', function() {
+	triggerDownload();
+});
+
+function combineSkins() {
+	if (!img1Data || !img2Data) return;
+
+	const skin1_64x32 = isChecked('skin1_64x32');
+	const skin1_jacket = isChecked('skin1_jacket');
+	const skin2_64x32 = isChecked('skin2_64x32');
+	const skin2_slim = isChecked('skin2_slim');
+	const fix_eyes = isChecked('fix_eyes');
+	const side_arms = isChecked('side_arms');
+	
+    		const headskin = username1 ? username1.value : '';
+    		const carrierskin = username2 ? username2.value : '';
+	
+	if ((isPeluchesMode && headskin !== "") || (!isPeluchesMode && headskin !== "" && carrierskin !== "")) {
+	    setNamesInUrl(headskin,carrierskin);
+	}
+	
+	const combinedData = ctx.createImageData(64, 64);
+	const data = combinedData.data;
+	
+	// Legacy watermark area, replaced below with the project credit.
+	// 7
+	setPixel(data, 62, 46, [0, 0, 0, 255]);
+	setPixel(data, 61, 46, [0, 0, 0, 255]);
+	setPixel(data, 60, 46, [0, 0, 0, 255]);
+	setPixel(data, 59, 45, [0, 0, 0, 255]);
+	setPixel(data, 58, 45, [0, 0, 0, 255]);
+	setPixel(data, 58, 46, [0, 0, 0, 255]);
+	setPixel(data, 58, 47, [0, 0, 0, 255]);
+	// 3
+	setPixel(data, 62, 43, [0, 0, 0, 255]);
+	setPixel(data, 62, 42, [0, 0, 0, 255]);
+	setPixel(data, 61, 41, [0, 0, 0, 255]);
+	setPixel(data, 60, 42, [0, 0, 0, 255]);
+	setPixel(data, 59, 41, [0, 0, 0, 255]);
+	setPixel(data, 58, 42, [0, 0, 0, 255]);
+	setPixel(data, 58, 43, [0, 0, 0, 255]);
+	// .
+	setPixel(data, 62, 39, [90, 90, 90, 255]);
+	// n
+	setPixel(data, 62, 37, [0, 0, 0, 255]);
+	setPixel(data, 61, 37, [0, 0, 0, 255]);
+	setPixel(data, 60, 37, [0, 0, 0, 255]);
+	setPixel(data, 60, 36, [0, 0, 0, 255]);
+	setPixel(data, 61, 35, [0, 0, 0, 255]);
+	setPixel(data, 62, 35, [0, 0, 0, 255]);
+	// u
+	setPixel(data, 60, 31, [0, 0, 0, 255]);
+	setPixel(data, 61, 33, [0, 0, 0, 255]);
+	setPixel(data, 60, 33, [0, 0, 0, 255]);
+	setPixel(data, 62, 32, [0, 0, 0, 255]);
+	setPixel(data, 61, 31, [0, 0, 0, 255]);
+	setPixel(data, 62, 31, [0, 0, 0, 255]);
+	// /
+	setPixel(data, 62, 29, [90, 90, 90, 255]);
+	setPixel(data, 61, 29, [90, 90, 90, 255]);
+	setPixel(data, 60, 28, [90, 90, 90, 255]);
+	setPixel(data, 59, 28, [90, 90, 90, 255]);
+	setPixel(data, 58, 27, [90, 90, 90, 255]);
+	setPixel(data, 57, 27, [90, 90, 90, 255]);
+	// M
+	setPixel(data, 62, 25, [0, 0, 0, 255]);
+	setPixel(data, 61, 25, [0, 0, 0, 255]);
+	setPixel(data, 60, 25, [0, 0, 0, 255]);
+	setPixel(data, 59, 25, [0, 0, 0, 255]);
+	setPixel(data, 58, 25, [0, 0, 0, 255]);
+	setPixel(data, 59, 24, [0, 0, 0, 255]);
+	setPixel(data, 60, 23, [0, 0, 0, 255]);
+	setPixel(data, 59, 22, [0, 0, 0, 255]);
+	setPixel(data, 62, 21, [0, 0, 0, 255]);
+	setPixel(data, 61, 21, [0, 0, 0, 255]);
+	setPixel(data, 60, 21, [0, 0, 0, 255]);
+	setPixel(data, 59, 21, [0, 0, 0, 255]);
+	setPixel(data, 58, 21, [0, 0, 0, 255]);
+	// S
+	setPixel(data, 62, 19, [0, 0, 0, 255]);
+	setPixel(data, 62, 18, [0, 0, 0, 255]);
+	setPixel(data, 62, 17, [0, 0, 0, 255]);
+	setPixel(data, 61, 16, [0, 0, 0, 255]);
+	setPixel(data, 60, 17, [0, 0, 0, 255]);
+	setPixel(data, 60, 18, [0, 0, 0, 255]);
+	setPixel(data, 59, 19, [0, 0, 0, 255]);
+	setPixel(data, 58, 18, [0, 0, 0, 255]);
+	setPixel(data, 58, 17, [0, 0, 0, 255]);
+	setPixel(data, 58, 16, [0, 0, 0, 255]);
+
+	// watermark Juniorcito_
+	clearArea(data, 57, 0, 7, 64);
+	drawPixelTextVertical('JUNIORCITO_', data, 60, 4, [0, 0, 0, 255]);
+
+	// base
+	//copyArea(img1Data.data, 0, 0, 64, 64, 0, 0, data);
+
+	// head top
+	copyArea(img1Data.data, 8, 0, 8, 8, 8, 0, data);
+
+	// head underside
+	copyArea(img1Data.data, 4, 16, 4, 4, 16, 0, data);
+	copyArea(img1Data.data, 4, 16, 4, 4, 20, 4, data);
+	if (skin1_64x32) {
+		copyArea(img1Data.data, 4, 16, 4, 4, 20, 0, data);
+		copyArea(img1Data.data, 4, 16, 4, 4, 16, 4, data);
+	} else {
+		copyArea(img1Data.data, 20, 48, 4, 4, 20, 0, data);
+		copyArea(img1Data.data, 20, 48, 4, 4, 16, 4, data);
+	}
+
+	// head front
+	copyArea(img1Data.data, 8, 9, 8, 2, 8, 8, data);
+	if (fix_eyes) {
+    			copyArea(img1Data.data, 8, 11, 8, 4, 8, 10, data);
+	} else {
+    			copyArea(img1Data.data, 8, 12, 8, 4, 8, 10, data);
+	}
+	copyArea(img1Data.data, 4, 20, 4, 1, 12, 15, data);
+	copyArea(img1Data.data, 20, 21, 3, 1, 8, 13, data);
+	copyArea(img1Data.data, 25, 21, 3, 1, 13, 13, data);
+	copyArea(img1Data.data, 20, 22, 8, 1, 8, 14, data);
+	copyArea(img1Data.data, 4, 20, 4, 1, 8, 15, data);
+	if (skin1_64x32) {
+		copyArea(img1Data.data, 4, 20, 4, 1, 12, 15, data);
+	} else {
+		copyArea(img1Data.data, 20, 52, 4, 1, 12, 15, data);
+	}
+
+	// head back
+	copyArea(img1Data.data, 24, 9, 8, 2, 24, 8, data);
+	copyArea(img1Data.data, 24, 12, 8, 4, 24, 10, data);
+	copyArea(img1Data.data, 32, 21, 8, 1, 24, 13, data);
+	copyArea(img1Data.data, 32, 22, 8, 1, 24, 14, data);
+	copyArea(img1Data.data, 12, 20, 4, 1, 24, 15, data);
+	if (skin1_64x32) {
+		copyArea(img1Data.data, 12, 20, 4, 1, 28, 15, data);
+	} else {
+		copyArea(img1Data.data, 28, 52, 4, 1, 28, 15, data);
+	}
+
+	// head left
+	copyArea(img1Data.data, 0, 9, 8, 2, 0, 8, data);
+	copyArea(img1Data.data, 0, 12, 8, 4, 0, 10, data);
+	copyArea(img1Data.data, 16, 21, 1, 2, 0, 13, data);
+	copyArea(img1Data.data, 16, 21, 1, 2, 1, 13, data);
+	copyArea(img1Data.data, 17, 21, 1, 2, 2, 13, data);
+	copyArea(img1Data.data, 17, 21, 1, 2, 3, 13, data);
+	copyArea(img1Data.data, 18, 21, 1, 2, 4, 13, data);
+	copyArea(img1Data.data, 18, 21, 1, 2, 5, 13, data);
+	copyArea(img1Data.data, 19, 21, 1, 2, 6, 13, data);
+	copyArea(img1Data.data, 19, 21, 1, 2, 7, 13, data);
+	copyArea(img1Data.data, 0, 20, 4, 1, 0, 15, data);
+	copyArea(img1Data.data, 12, 20, 4, 1, 4, 15, data);
+
+	// head right
+	copyArea(img1Data.data, 16, 9, 8, 2, 16, 8, data);
+	copyArea(img1Data.data, 16, 12, 8, 4, 16, 10, data);
+	copyArea(img1Data.data, 28, 21, 1, 2, 16, 13, data);
+	copyArea(img1Data.data, 28, 21, 1, 2, 17, 13, data);
+	copyArea(img1Data.data, 29, 21, 1, 2, 18, 13, data);
+	copyArea(img1Data.data, 29, 21, 1, 2, 19, 13, data);
+	copyArea(img1Data.data, 30, 21, 1, 2, 20, 13, data);
+	copyArea(img1Data.data, 30, 21, 1, 2, 21, 13, data);
+	copyArea(img1Data.data, 31, 21, 1, 2, 22, 13, data);
+	copyArea(img1Data.data, 31, 21, 1, 2, 23, 13, data);
+	copyArea(img1Data.data, 0, 20, 4, 1, 16, 15, data);
+	copyArea(img1Data.data, 12, 20, 4, 1, 20, 15, data);
+	
+	// 2nd layer head top
+	copyArea(img1Data.data, 40, 0, 8, 8, 40, 0, data);
+
+	// 2nd layer head front
+	copyArea(img1Data.data, 40, 9, 8, 2, 40, 8, data);
+	if (fix_eyes) {
+    			copyArea(img1Data.data, 40, 11, 8, 4, 40, 10, data);
+	} else {
+    			copyArea(img1Data.data, 40, 12, 8, 4, 40, 10, data);
+	}
+	if (skin1_jacket) {
+		copyArea(img1Data.data, 20, 37, 3, 1, 40, 13, data);
+		copyArea(img1Data.data, 25, 37, 3, 1, 45, 13, data);
+		copyArea(img1Data.data, 20, 38, 8, 1, 40, 14, data);
+		copyArea(img1Data.data, 4, 36, 4, 1, 40, 15, data);
+		copyArea(img1Data.data, 4, 52, 4, 1, 44, 15, data);
+	}
+
+	// 2nd layer head back
+	copyArea(img1Data.data, 56, 9, 8, 2, 56, 8, data);
+	copyArea(img1Data.data, 56, 12, 8, 4, 56, 10, data);
+	if (skin1_jacket) {
+		copyArea(img1Data.data, 32, 36, 8, 1, 56, 13, data);
+		copyArea(img1Data.data, 32, 37, 8, 1, 56, 14, data);
+		copyArea(img1Data.data, 12, 36, 4, 1, 56, 15, data);
+		copyArea(img1Data.data, 12, 52, 4, 1, 60, 15, data);
+	}
+
+	// 2nd layer head left
+	copyArea(img1Data.data, 32, 9, 8, 2, 32, 8, data);
+	copyArea(img1Data.data, 32, 12, 8, 4, 32, 10, data);
+	if (skin1_jacket) {
+		copyArea(img1Data.data, 16, 37, 1, 2, 32, 13, data);
+		copyArea(img1Data.data, 16, 37, 1, 2, 33, 13, data);
+		copyArea(img1Data.data, 17, 37, 1, 2, 34, 13, data);
+		copyArea(img1Data.data, 17, 37, 1, 2, 35, 13, data);
+		copyArea(img1Data.data, 18, 37, 1, 2, 36, 13, data);
+		copyArea(img1Data.data, 18, 37, 1, 2, 37, 13, data);
+		copyArea(img1Data.data, 19, 37, 1, 2, 38, 13, data);
+		copyArea(img1Data.data, 19, 37, 1, 2, 39, 13, data);
+		copyArea(img1Data.data, 0, 37, 1, 1, 32, 15, data);
+		copyArea(img1Data.data, 0, 37, 1, 1, 33, 15, data);
+		copyArea(img1Data.data, 1, 37, 1, 1, 34, 15, data);
+		copyArea(img1Data.data, 1, 37, 1, 1, 35, 15, data);
+		copyArea(img1Data.data, 2, 37, 1, 1, 36, 15, data);
+		copyArea(img1Data.data, 2, 37, 1, 1, 37, 15, data);
+		copyArea(img1Data.data, 3, 37, 1, 1, 38, 15, data);
+		copyArea(img1Data.data, 3, 37, 1, 1, 39, 15, data);
+	}
+
+	// 2nd layer head right
+	copyArea(img1Data.data, 48, 9, 8, 2, 48, 8, data);
+	copyArea(img1Data.data, 48, 12, 8, 4, 48, 10, data);
+	if (skin1_jacket) {
+		copyArea(img1Data.data, 28, 37, 1, 2, 48, 13, data);
+		copyArea(img1Data.data, 28, 37, 1, 2, 49, 13, data);
+		copyArea(img1Data.data, 29, 37, 1, 2, 50, 13, data);
+		copyArea(img1Data.data, 29, 37, 1, 2, 51, 13, data);
+		copyArea(img1Data.data, 30, 37, 1, 2, 52, 13, data);
+		copyArea(img1Data.data, 30, 37, 1, 2, 53, 13, data);
+		copyArea(img1Data.data, 31, 37, 1, 2, 54, 13, data);
+		copyArea(img1Data.data, 31, 37, 1, 2, 55, 13, data);
+		copyArea(img1Data.data, 8, 37, 1, 1, 48, 15, data);
+		copyArea(img1Data.data, 8, 37, 1, 1, 49, 15, data);
+		copyArea(img1Data.data, 9, 37, 1, 1, 50, 15, data);
+		copyArea(img1Data.data, 9, 37, 1, 1, 51, 15, data);
+		copyArea(img1Data.data, 10, 37, 1, 1, 52, 15, data);
+		copyArea(img1Data.data, 10, 37, 1, 1, 53, 15, data);
+		copyArea(img1Data.data, 11, 37, 1, 1, 54, 15, data);
+		copyArea(img1Data.data, 11, 37, 1, 1, 55, 15, data);
+	}
+
+	// arms
+	if (side_arms) {
+    			copyArea(img1Data.data, 45, 20, 2, 1, 35, 13, data);
+    			copyArea(img1Data.data, 45, 31, 2, 1, 35, 14, data);
+    			if (skin1_64x32) {
+    				copyArea(img1Data.data, 45, 20, 2, 1, 51, 13, data);
+    				copyArea(img1Data.data, 45, 31, 2, 1, 51, 14, data);
+    			} else {
+    				copyArea(img1Data.data, 37, 52, 2, 1, 51, 13, data);
+    				copyArea(img1Data.data, 37, 63, 2, 1, 51, 14, data);
+    			}
+    			if (skin1_jacket) {
+        			copyArea(img1Data.data, 45, 36, 2, 1, 35, 13, data);
+        			if (skin1_64x32) {
+        				copyArea(img1Data.data, 45, 36, 2, 1, 51, 13, data);
+        			} else {
+        				copyArea(img1Data.data, 53, 52, 2, 1, 51, 13, data);
+        			}
+    			}
+	} else {
+    			copyArea(img1Data.data, 45, 20, 2, 1, 39, 13, data);
+    			copyArea(img1Data.data, 45, 31, 2, 1, 39, 14, data);
+    			if (skin1_64x32) {
+    				copyArea(img1Data.data, 45, 20, 2, 1, 47, 13, data);
+    				copyArea(img1Data.data, 45, 31, 2, 1, 47, 14, data);
+    			} else {
+    				copyArea(img1Data.data, 37, 52, 2, 1, 47, 13, data);
+    				copyArea(img1Data.data, 37, 63, 2, 1, 47, 14, data);
+    			}
+    			if (skin1_jacket) {
+        			copyArea(img1Data.data, 45, 36, 2, 1, 39, 13, data);
+        			if (skin1_64x32) {
+        				copyArea(img1Data.data, 45, 36, 2, 1, 47, 13, data);
+        			} else {
+        				copyArea(img1Data.data, 53, 52, 2, 1, 47, 13, data);
+        			}
+    			}
+	}
+
+	// shoes
+	copyArea(img1Data.data, 5, 31, 2, 1, 41, 15, data);
+	copyArea(img1Data.data, 9, 17, 2, 1, 49, 7, data);
+	if (skin1_64x32) {
+		copyArea(img1Data.data, 5, 31, 2, 1, 45, 15, data);
+		copyArea(img1Data.data, 9, 17, 2, 1, 53, 7, data);
+	} else {
+		copyArea(img1Data.data, 21, 63, 2, 1, 45, 15, data);
+		copyArea(img1Data.data, 25, 49, 2, 1, 53, 7, data);
+	}
+	
+	// body front
+	copyArea(img2Data.data, 8, 8, 8, 8, 20, 20, data);
+	copyArea(img2Data.data, 20, 20, 8, 1, 20, 28, data);
+	copyArea(img2Data.data, 20, 22, 8, 1, 20, 29, data);
+	copyArea(img2Data.data, 20, 24, 8, 1, 20, 30, data);
+	copyArea(img2Data.data, 20, 26, 8, 1, 20, 31, data);
+	
+	// body top
+	copyArea(img2Data.data, 8, 2, 8, 4, 20, 16, data);
+
+	// body back
+	copyArea(img2Data.data, 24, 8, 8, 8, 32, 20, data);
+	copyArea(img2Data.data, 32, 20, 8, 1, 32, 28, data);
+	copyArea(img2Data.data, 32, 22, 8, 1, 32, 29, data);
+	copyArea(img2Data.data, 32, 24, 8, 1, 32, 30, data);
+	copyArea(img2Data.data, 32, 26, 8, 1, 32, 31, data);
+
+	// body left
+	copyArea(img2Data.data, 2, 8, 1, 8, 16, 20, data);
+	copyArea(img2Data.data, 4, 8, 1, 8, 17, 20, data);
+	copyArea(img2Data.data, 6, 8, 1, 8, 18, 20, data);
+	copyArea(img2Data.data, 7, 8, 1, 8, 19, 20, data);
+	copyArea(img2Data.data, 16, 20, 4, 1, 16, 28, data);
+	copyArea(img2Data.data, 16, 22, 4, 1, 16, 29, data);
+	copyArea(img2Data.data, 16, 24, 4, 1, 16, 30, data);
+	copyArea(img2Data.data, 16, 26, 4, 1, 16, 31, data);
+
+	// body right
+	copyArea(img2Data.data, 16, 8, 1, 8, 28, 20, data);
+	copyArea(img2Data.data, 17, 8, 1, 8, 29, 20, data);
+	copyArea(img2Data.data, 19, 8, 1, 8, 30, 20, data);
+	copyArea(img2Data.data, 21, 8, 1, 8, 31, 20, data);
+	copyArea(img2Data.data, 28, 20, 4, 1, 28, 28, data);
+	copyArea(img2Data.data, 28, 22, 4, 1, 28, 29, data);
+	copyArea(img2Data.data, 28, 24, 4, 1, 28, 30, data);
+	copyArea(img2Data.data, 28, 26, 4, 1, 28, 31, data);
+	
+	// 2nd layer body front
+	copyArea(img2Data.data, 40, 8, 8, 8, 20, 36, data);
+	if (!skin2_64x32) {
+	copyArea(img2Data.data, 20, 36, 8, 1, 20, 44, data);
+	copyArea(img2Data.data, 20, 38, 8, 1, 20, 45, data);
+	copyArea(img2Data.data, 20, 40, 8, 1, 20, 46, data);
+	copyArea(img2Data.data, 20, 42, 8, 1, 20, 47, data);
+	}
+	
+	// 2nd layer body top
+	copyArea(img2Data.data, 40, 2, 8, 4, 20, 32, data);
+
+	// 2nd layer body back
+	copyArea(img2Data.data, 56, 8, 8, 8, 32, 36, data);
+	if (!skin2_64x32) {
+	copyArea(img2Data.data, 32, 36, 8, 1, 32, 44, data);
+	copyArea(img2Data.data, 32, 38, 8, 1, 32, 45, data);
+	copyArea(img2Data.data, 32, 40, 8, 1, 32, 46, data);
+	copyArea(img2Data.data, 32, 42, 8, 1, 32, 47, data);
+	}
+	
+	// 2nd layer body left
+	copyArea(img2Data.data, 34, 8, 1, 8, 16, 36, data);
+	copyArea(img2Data.data, 36, 8, 1, 8, 17, 36, data);
+	copyArea(img2Data.data, 38, 8, 1, 8, 18, 36, data);
+	copyArea(img2Data.data, 39, 8, 1, 8, 19, 36, data);
+	if (!skin2_64x32) {
+	copyArea(img2Data.data, 16, 36, 4, 1, 16, 44, data);
+	copyArea(img2Data.data, 16, 38, 4, 1, 16, 45, data);
+	copyArea(img2Data.data, 16, 40, 4, 1, 16, 46, data);
+	copyArea(img2Data.data, 16, 42, 4, 1, 16, 47, data);
+	}
+
+	// 2nd layer body right
+	copyArea(img2Data.data, 48, 8, 1, 8, 28, 36, data);
+	copyArea(img2Data.data, 49, 8, 1, 8, 29, 36, data);
+	copyArea(img2Data.data, 51, 8, 1, 8, 30, 36, data);
+	copyArea(img2Data.data, 53, 8, 1, 8, 31, 36, data);
+	if (!skin2_64x32) {
+	copyArea(img2Data.data, 28, 36, 4, 1, 28, 44, data);
+	copyArea(img2Data.data, 28, 38, 4, 1, 28, 45, data);
+	copyArea(img2Data.data, 28, 40, 4, 1, 28, 46, data);
+	copyArea(img2Data.data, 28, 42, 4, 1, 28, 47, data);
+	}
+
+	// left leg
+	copyArea(img2Data.data, 8, 16, 4, 4, 8, 16, data);
+	copyArea(img2Data.data, 28, 16, 4, 4, 4, 16, data);
+	copyArea(img2Data.data, 20, 28, 4, 1, 4, 20, data);
+	copyArea(img2Data.data, 20, 30, 4, 1, 4, 21, data);
+	copyArea(img2Data.data, 36, 28, 4, 1, 12, 20, data);
+	copyArea(img2Data.data, 36, 30, 4, 1, 12, 21, data);
+	copyArea(img2Data.data, 30, 17, 4, 2, 8, 20, data);
+	copyArea(img2Data.data, 16, 28, 4, 1, 0, 20, data);
+	copyArea(img2Data.data, 16, 30, 4, 1, 0, 21, data);
+	copyArea(img2Data.data, 0, 20, 16, 1, 0, 22, data);
+	copyArea(img2Data.data, 0, 22, 16, 1, 0, 23, data);
+	copyArea(img2Data.data, 0, 24, 16, 1, 0, 24, data);
+	copyArea(img2Data.data, 0, 25, 16, 7, 0, 25, data);
+
+	// right leg
+	if (skin2_64x32) {
+		copyArea(data, 0, 16, 16, 4, 16, 48, data);
+		copyArea(data, 12, 20, 1, 12, 31, 52, data);
+		copyArea(data, 13, 20, 1, 12, 30, 52, data);
+		copyArea(data, 14, 20, 1, 12, 29, 52, data);
+		copyArea(data, 15, 20, 1, 12, 28, 52, data);
+		copyArea(data, 0, 20, 1, 12, 27, 52, data);
+		copyArea(data, 1, 20, 1, 12, 26, 52, data);
+		copyArea(data, 2, 20, 1, 12, 25, 52, data);
+		copyArea(data, 3, 20, 1, 12, 24, 52, data);
+		copyArea(data, 4, 20, 1, 12, 23, 52, data);
+		copyArea(data, 5, 20, 1, 12, 22, 52, data);
+		copyArea(data, 6, 20, 1, 12, 21, 52, data);
+		copyArea(data, 7, 20, 1, 12, 20, 52, data);
+		copyArea(data, 8, 20, 1, 12, 19, 52, data);
+		copyArea(data, 9, 20, 1, 12, 18, 52, data);
+		copyArea(data, 10, 20, 1, 12, 17, 52, data);
+		copyArea(data, 11, 20, 1, 12, 16, 52, data);
+	} else {
+		copyArea(img2Data.data, 24, 48, 4, 4, 24, 48, data);
+		copyArea(img2Data.data, 32, 16, 4, 4, 20, 48, data);
+		copyArea(img2Data.data, 24, 28, 4, 1, 20, 52, data);
+		copyArea(img2Data.data, 24, 30, 4, 1, 20, 53, data);
+		copyArea(img2Data.data, 32, 28, 4, 1, 28, 52, data);
+		copyArea(img2Data.data, 32, 30, 4, 1, 28, 53, data);
+		copyArea(img2Data.data, 30, 17, 4, 2, 24, 52, data);
+		copyArea(img2Data.data, 28, 28, 4, 1, 16, 52, data);
+		copyArea(img2Data.data, 28, 30, 4, 1, 16, 53, data);
+		copyArea(img2Data.data, 16, 52, 16, 1, 16, 54, data);
+		copyArea(img2Data.data, 16, 54, 16, 1, 16, 55, data);
+		copyArea(img2Data.data, 16, 56, 16, 1, 16, 56, data);
+		copyArea(img2Data.data, 16, 57, 16, 7, 16, 57, data);
+	}
+
+	if (!skin2_64x32) {
+	// 2nd layer left leg
+	copyArea(img2Data.data, 8, 32, 4, 4, 8, 32, data);
+	copyArea(img2Data.data, 20, 44, 4, 1, 4, 36, data);
+	copyArea(img2Data.data, 20, 46, 4, 1, 4, 37, data);
+	copyArea(img2Data.data, 36, 44, 4, 1, 12, 36, data);
+	copyArea(img2Data.data, 36, 46, 4, 1, 12, 37, data);
+	copyArea(img2Data.data, 30, 32, 4, 2, 8, 36, data);
+	copyArea(img2Data.data, 16, 44, 4, 1, 0, 36, data);
+	copyArea(img2Data.data, 16, 46, 4, 1, 0, 37, data);
+	copyArea(img2Data.data, 0, 36, 16, 1, 0, 38, data);
+	copyArea(img2Data.data, 0, 38, 16, 1, 0, 39, data);
+	copyArea(img2Data.data, 0, 40, 16, 1, 0, 40, data);
+	copyArea(img2Data.data, 0, 41, 16, 7, 0, 41, data);
+
+	// 2nd layer right leg
+	copyArea(img2Data.data, 8, 48, 4, 4, 8, 48, data);
+	copyArea(img2Data.data, 24, 44, 4, 1, 4, 52, data);
+	copyArea(img2Data.data, 24, 46, 4, 1, 4, 53, data);
+	copyArea(img2Data.data, 32, 44, 4, 1, 12, 52, data);
+	copyArea(img2Data.data, 32, 46, 4, 1, 12, 53, data);
+	copyArea(img2Data.data, 30, 32, 4, 2, 0, 52, data);
+	copyArea(img2Data.data, 28, 44, 4, 1, 8, 52, data);
+	copyArea(img2Data.data, 28, 46, 4, 1, 8, 53, data);
+	copyArea(img2Data.data, 0, 52, 16, 1, 0, 54, data);
+	copyArea(img2Data.data, 0, 54, 16, 1, 0, 55, data);
+	copyArea(img2Data.data, 0, 56, 16, 1, 0, 56, data);
+	copyArea(img2Data.data, 0, 57, 16, 7, 0, 57, data);
+	}
+
+	// left arm
+	if (skin2_slim) {
+		copyArea(img2Data.data, 44, 16, 6, 4, 44, 16, data, true);
+		copyArea(img2Data.data, 40, 20, 4, 12, 40, 20, data, true);
+		copyArea(img2Data.data, 44, 20, 3, 12, 51, 20, data, true);
+		copyArea(img2Data.data, 47, 20, 4, 12, 47, 20, data, true);
+		copyArea(img2Data.data, 51, 20, 3, 12, 44, 20, data, true);
+	} else {
+		copyArea(img2Data.data, 44, 16, 8, 4, 44, 16, data, true);
+		copyArea(img2Data.data, 48, 20, 4, 12, 48, 20, data, true);
+		copyArea(img2Data.data, 52, 20, 4, 12, 44, 20, data, true);
+		copyArea(img2Data.data, 40, 20, 4, 12, 40, 20, data, true);
+		copyArea(img2Data.data, 44, 20, 4, 12, 52, 20, data, true);
+	}
+
+	// right arm
+	if (skin2_64x32) {
+		copyArea(data, 40, 16, 16, 4, 32, 48, data);
+		copyArea(data, 52, 20, 1, 12, 47, 52, data);
+		copyArea(data, 53, 20, 1, 12, 46, 52, data);
+		copyArea(data, 54, 20, 1, 12, 45, 52, data);
+		copyArea(data, 55, 20, 1, 12, 44, 52, data);
+		copyArea(data, 40, 20, 1, 12, 43, 52, data);
+		copyArea(data, 41, 20, 1, 12, 42, 52, data);
+		copyArea(data, 42, 20, 1, 12, 41, 52, data);
+		copyArea(data, 43, 20, 1, 12, 40, 52, data);
+		copyArea(data, 44, 20, 1, 12, 39, 52, data);
+		copyArea(data, 45, 20, 1, 12, 38, 52, data);
+		copyArea(data, 46, 20, 1, 12, 37, 52, data);
+		copyArea(data, 47, 20, 1, 12, 36, 52, data);
+		copyArea(data, 48, 20, 1, 12, 35, 52, data);
+		copyArea(data, 49, 20, 1, 12, 34, 52, data);
+		copyArea(data, 50, 20, 1, 12, 33, 52, data);
+		copyArea(data, 51, 20, 1, 12, 32, 52, data);
+	} else {
+		if (skin2_slim) {
+			copyArea(img2Data.data, 36, 48, 6, 4, 36, 48, data, true);
+			copyArea(img2Data.data, 32, 52, 4, 12, 32, 52, data, true);
+			copyArea(img2Data.data, 36, 52, 3, 12, 43, 52, data, true);
+			copyArea(img2Data.data, 39, 52, 4, 12, 39, 52, data, true);
+			copyArea(img2Data.data, 43, 52, 3, 12, 36, 52, data, true);
+		} else {
+			copyArea(img2Data.data, 36, 48, 8, 4, 36, 48, data, true);
+			copyArea(img2Data.data, 32, 52, 4, 12, 32, 52, data, true);
+			copyArea(img2Data.data, 36, 52, 4, 12, 44, 52, data, true);
+			copyArea(img2Data.data, 40, 52, 4, 12, 40, 52, data, true);
+			copyArea(img2Data.data, 44, 52, 4, 12, 36, 52, data, true);
+		}
+	}
+
+	if (!skin2_64x32) {
+	// 2nd layer left arm
+	if (skin2_slim) {
+		copyArea(img2Data.data, 44, 32, 6, 4, 44, 32, data, true);
+		copyArea(img2Data.data, 40, 36, 4, 12, 40, 36, data, true);
+		copyArea(img2Data.data, 44, 36, 3, 12, 51, 36, data, true);
+		copyArea(img2Data.data, 47, 36, 4, 12, 47, 36, data, true);
+		copyArea(img2Data.data, 51, 36, 3, 12, 44, 36, data, true);
+	} else {
+		copyArea(img2Data.data, 44, 32, 8, 4, 44, 32, data, true);
+		copyArea(img2Data.data, 48, 36, 4, 12, 48, 36, data, true);
+		copyArea(img2Data.data, 52, 36, 4, 12, 44, 36, data, true);
+		copyArea(img2Data.data, 40, 36, 4, 12, 40, 36, data, true);
+		copyArea(img2Data.data, 44, 36, 4, 12, 52, 36, data, true);
+	}
+
+	// 2nd layer right arm
+	if (skin2_slim) {
+		copyArea(img2Data.data, 52, 48, 6, 4, 52, 48, data, true);
+		copyArea(img2Data.data, 48, 52, 4, 12, 48, 52, data, true);
+		copyArea(img2Data.data, 52, 52, 3, 12, 59, 52, data, true);
+		copyArea(img2Data.data, 55, 52, 4, 12, 55, 52, data, true);
+		copyArea(img2Data.data, 59, 52, 3, 12, 52, 52, data, true);
+	} else {
+		copyArea(img2Data.data, 52, 48, 8, 4, 52, 48, data, true);
+		copyArea(img2Data.data, 48, 52, 4, 12, 48, 52, data, true);
+		copyArea(img2Data.data, 52, 52, 4, 12, 60, 52, data, true);
+		copyArea(img2Data.data, 56, 52, 4, 12, 56, 52, data, true);
+		copyArea(img2Data.data, 60, 52, 4, 12, 52, 52, data, true);
+	}
+	}
+
+	ctx.putImageData(combinedData, 0, 0);
+            combinedImgElement.src = canvas.toDataURL();
+            showImageCard(combinedImgElement);
+            updateDownloadState();
+ 
+            const resultPreview = getElement('result-preview');
+            resultPreview.style.display = 'block';
+ 
+            const base64 = combinedImgElement.src.split(',')[1]
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=+$/, '');
+            
+            var slimquery = skin2_slim ? "slim" : "";
+
+            getElement('full-body-preview').src = getApiUrl('frontfull/384/' + base64) + (useFallback ? '&' : '?') + slimquery;
+            getElement('head-preview').src = getApiUrl('head/256/' + base64);
+}
+
+function handleInput(input, callback) {
+	if (!input) return;
+	if (input.files && input.files[0]) {
+		loadImage(input.files[0], callback);
+	} else if (input.value) {
+		const username = input.value.trim();
+		const url = getApiUrl('processedskin/' + username);
+		loadImage(url, callback);
+	}
+}
+
+function loadDefaultCarrierSkin() {
+	loadImage(DEFAULT_CARRIER_SKIN, function(img) {
+		img2Element.src = img.src;
+		img2Data = getImageData(img);
+		if (img1Data) combineSkins();
+	});
+}
+
+if (upload1) upload1.addEventListener('change', function() {
+	handleInput(upload1, function(img) {
+		img1Element.src = img.src;
+		showImageCard(img1Element);
+		img1Data = getImageData(img);
+		if (img2Data) combineSkins();
+	});
+});
+
+if (upload2) upload2.addEventListener('change', function() {
+	handleInput(upload2, function(img) {
+		img2Element.src = img.src;
+		showImageCard(img2Element);
+		img2Data = getImageData(img);
+		if (img1Data) combineSkins();
+	});
+});
+
+if (username1) username1.addEventListener('change', function() {
+	handleInput(username1, function(img) {
+		img1Element.src = img.src;
+		showImageCard(img1Element);
+		img1Data = getImageData(img);
+		if (img2Data) combineSkins();
+	});
+});
+
+if (username2) username2.addEventListener('change', function() {
+	handleInput(username2, function(img) {
+		img2Element.src = img.src;
+		showImageCard(img2Element);
+		img2Data = getImageData(img);
+		if (img1Data) combineSkins();
+	});
+});
+
+if (getElement('skin1_64x32')) getElement('skin1_64x32').addEventListener('change', function() {
+	if (img2Data) combineSkins();
+});
+
+if (getElement('skin1_jacket')) getElement('skin1_jacket').addEventListener('change', function() {
+	if (img2Data) combineSkins();
+});
+
+if (getElement('skin2_64x32')) getElement('skin2_64x32').addEventListener('change', function() {
+	if (img2Data) combineSkins();
+});
+
+if (getElement('skin2_slim')) getElement('skin2_slim').addEventListener('change', function() {
+	if (img2Data) combineSkins();
+});
+
+if (getElement('fix_eyes')) getElement('fix_eyes').addEventListener('change', function() {
+	if (img2Data) combineSkins();
+});
+
+if (getElement('side_arms')) getElement('side_arms').addEventListener('change', function() {
+	if (img2Data) combineSkins();
+});
+
+checkVzgeAvailability().then(function() {
+	if (isPeluchesMode) loadDefaultCarrierSkin();
+	getUsersFromUrl();
+	updateDownloadState();
+});

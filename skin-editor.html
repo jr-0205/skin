@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Editor de skins</title>
+	<link rel="stylesheet" href="css/styles.css">
+	<link rel="icon" href="assets/main-icon.png">
+</head>
+<body class="editor-page">
+	<a class="back-link" href="index.html">Volver</a>
+	<img class="page-icon" src="assets/main-icon.png" alt="Icono de Juniorcito_">
+	<h1>Editor de skins</h1>
+	<p class="credits">Creado por Juniorcito_</p>
+
+	<main class="editor-shell skindex-shell">
+		<section class="skindex-workspace">
+			<aside class="editor-panel vertical-tools" aria-label="Herramientas del editor">
+				<div class="tool-stack" role="group" aria-label="Modos de herramienta">
+					<button class="icon-tool is-active" type="button" data-tool="pencil" title="Pincel">Pincel</button>
+					<button class="icon-tool" type="button" data-tool="eraser" title="Borrador">Borrar</button>
+					<button class="icon-tool" type="button" data-tool="fill" title="Rellenar">Relleno</button>
+					<button class="icon-tool" type="button" data-tool="picker" title="Cuentagotas">Color</button>
+				</div>
+
+				<div class="tool-stack compact" role="group" aria-label="Acciones del editor">
+					<button class="icon-tool small" type="button" id="undoBtn" title="Deshacer">Deshacer</button>
+					<button class="icon-tool small" type="button" id="lighterBtn" title="Aclarar color">Aclarar</button>
+					<button class="icon-tool small" type="button" id="darkerBtn" title="Oscurecer color">Oscurecer</button>
+					<button class="icon-tool small" type="button" id="toggleGrid" title="Cuadricula">Grid</button>
+					<button class="icon-tool small danger" type="button" id="clearBtn" title="Limpiar skin">Limpiar</button>
+				</div>
+
+				<label class="upload_label editor-upload" for="skinUpload">Subir skin</label>
+				<input type="file" id="skinUpload" accept="image/png">
+			</aside>
+
+			<section class="editor-panel model-panel skindex-model">
+				<div class="model-header">
+					<h2>Vista 3D</h2>
+					<div class="model-controls">
+						<label class="range-control">
+							<span>Giro</span>
+							<input type="range" id="modelRotation" min="-180" max="180" value="28">
+							<strong id="modelRotationValue">28</strong>
+						</label>
+						<label class="range-control">
+							<span>Altura</span>
+							<input type="range" id="modelPitch" min="-35" max="35" value="10">
+							<strong id="modelPitchValue">10</strong>
+						</label>
+						<label class="range-control">
+							<span>Zoom</span>
+							<input type="range" id="modelZoom" min="90" max="180" value="125">
+							<strong id="modelZoomValue">125%</strong>
+						</label>
+					</div>
+				</div>
+				<canvas id="modelCanvas" class="model-canvas" width="520" height="600" aria-label="Previsualizacion armada de la skin"></canvas>
+			</section>
+
+			<aside class="editor-panel editor-info skindex-side">
+				<h2>Color y modelo</h2>
+				<label class="color-control color-wheel-lite">
+					<span>Color actual</span>
+					<input type="color" id="colorPicker" value="#8b5cf6">
+					<strong id="colorValue">#8b5cf6</strong>
+				</label>
+
+				<label class="range-control brush-control">
+					<span>Tamaño</span>
+					<input type="range" id="brushSize" min="1" max="8" value="1">
+					<strong id="brushSizeValue">1</strong>
+				</label>
+
+				<label class="select-control">
+					<span>Modelo</span>
+					<select id="modelType">
+						<option value="classic">Clásico (4px)</option>
+						<option value="slim">Delgado (3px)</option>
+					</select>
+				</label>
+
+				<div class="part-controls" aria-label="Partes visibles del modelo">
+					<button class="part-toggle is-active" type="button" data-preview-option="showBaseLayer">Base</button>
+					<button class="part-toggle is-active" type="button" data-preview-option="showOuterLayer">Capa</button>
+					<button class="part-toggle is-active" type="button" data-preview-option="showHead">Cabeza</button>
+					<button class="part-toggle is-active" type="button" data-preview-option="showBody">Cuerpo</button>
+					<button class="part-toggle is-active" type="button" data-preview-option="showRightArm">Brazo der.</button>
+					<button class="part-toggle is-active" type="button" data-preview-option="showLeftArm">Brazo izq.</button>
+					<button class="part-toggle is-active" type="button" data-preview-option="showRightLeg">Pierna der.</button>
+					<button class="part-toggle is-active" type="button" data-preview-option="showLeftLeg">Pierna izq.</button>
+				</div>
+				<dl>
+					<div>
+						<dt>Herramienta</dt>
+						<dd id="currentToolLabel">Pincel</dd>
+					</div>
+					<div>
+						<dt>Pixel</dt>
+						<dd id="pixelLabel">x: 0, y: 0</dd>
+					</div>
+				</dl>
+
+				<button class="editor-button primary download-wide" type="button" id="downloadSkinBtn">Descargar skin</button>
+			</aside>
+
+			<section class="texture-panel" aria-hidden="true">
+				<canvas id="skinCanvas" class="editor-canvas internal-texture" width="512" height="512" aria-label="Textura interna de la skin"></canvas>
+			</section>
+		</section>
+	</main>
+
+	<script src="js/skin-editor.js"></script>
+</body>
+</html>

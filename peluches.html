@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Crear Peluches</title>
+	<link rel="stylesheet" href="css/styles.css">
+	<link rel="icon" href="assets/main-icon.png">
+</head>
+<body data-generator="peluches">
+	<a class="back-link" href="index.html">Volver</a>
+	<img class="page-icon" src="assets/main-icon.png" alt="Icono de Juniorcito_">
+	<h1>Crear Peluches</h1>
+	<p class="credits">Creado por Juniorcito_</p>
+
+	<section class="tool-section" id="peluches-section">
+		<h2 class="section-title">Cabeza</h2>
+		<fieldset class="input-container">
+			<legend for="username1">Cabeza del peluche</legend>
+			<input type="text" id="username1" placeholder="Nombre de usuario">
+			<label class="upload_label" for="upload1">Subir&nbsp;archivo</label>
+			<input type="file" id="upload1" accept="image/png">
+			<div class="break"></div>
+			<div class="checkbox-group">
+				<label><input type="checkbox" id="skin1_64x32">Skin 64x32</label>
+				<label><input type="checkbox" id="skin1_jacket"><abbr title="Segunda capa de la skin para cuerpo y pantalones, sin contar la cabeza">Mostrar capa exterior</abbr></label>
+				<label><input type="checkbox" id="fix_eyes"><abbr title="Activa esto si los ojos no se muestran correctamente">Corregir ojos</abbr></label>
+				<label><input type="checkbox" id="side_arms"><abbr title="Brazos a los lados">Brazos laterales</abbr></label>
+			</div>
+		</fieldset>
+	</section>
+
+	<canvas id="canvas" width="64" height="64"></canvas>
+	<div class="images-container">
+		<div class="image-card is-hidden">
+			<h2>Cabeza del peluche</h2>
+			<img id="img1" width="128" height="128">
+		</div>
+		<div class="image-card is-hidden" data-hidden-preview="true">
+			<h2>Cuerpo Base</h2>
+			<img id="img2" width="128" height="128" alt="Skin por defecto">
+		</div>
+		<div class="image-card is-hidden">
+			<h2>Resultado</h2>
+			<img id="combinedImg" width="128" height="128">
+		</div>
+	</div>
+
+	<div id="download-section">
+		<button id="downloadBtn" disabled>Descargar resultado</button>
+		<p id="downloadHelp">También puedes hacer clic derecho y guardar la imagen si el botón no funciona.</p>
+	</div>
+
+	<div id="result-preview" class="is-hidden">
+		<img class="preview" id="full-body-preview" src="" alt="Vista previa de cuerpo completo">
+		<img class="preview" id="head-preview" src="" alt="Vista previa de la cabeza">
+	</div>
+	<script src="js/app.js"></script>
+</body>
+</html>
